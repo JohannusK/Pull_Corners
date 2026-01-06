@@ -6,7 +6,20 @@
 A **browser-based tool** for manually flattening photographed documents  
 (e.g. fragile archive reports, books, scanned pages) by *pulling the corners*  
 and exporting high-quality images or a combined PDF.
+
 Everything runs locally in your browser.
+
+---
+
+## What it does
+
+![Pull Corners example](example.png)
+
+**Input:** a photographed page taken at an angle  
+**Process:** manually adjust the four page corners  
+**Output:** a flat, geometrically corrected page, preserving the original appearance
+
+No automatic enhancement, no guessing — you decide what the page edges are.
 
 ---
 
@@ -51,6 +64,32 @@ This tool gives you **full manual control** over page geometry, while keeping th
 4. Press **Enter** to preview
 5. Press **Enter** again to download the flattened image  
    or click **Download PDF** to export all pages
+
+---
+
+## Controls
+
+### Mouse
+- Drag corner points directly in the left (full image) view
+
+### Keyboard
+- `1 2 3 4` – select active corner  
+- Arrow keys – move active corner (step size scales with zoom)  
+- `+` / `-` – zoom in / out  
+- `Enter` – preview flattened page  
+- `Enter` (in preview) – download flattened JPG  
+- `Esc` – close preview  
+- `n` / `b` – next / previous image  
+
+---
+
+## Output resolution
+
+- Default: **A4 at 300 DPI**
+  - Portrait: `2480 × 3508`
+  - Landscape: `3508 × 2480`
+
+This matches common archival and publication standards.
 
 ---
 
