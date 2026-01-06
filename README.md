@@ -1,4 +1,5 @@
 # Pull Corners – Browser-Based Document Flattening
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18166769.svg)](https://doi.org/10.5281/zenodo.18166769)
 
 **Live tool:**  
 👉 https://johannusk.github.io/Pull_Corners/
