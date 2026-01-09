@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Pull Corners (Mobile)</title>
+  <style>
+    :root{
+      --bg:#0f0f0f; --panel:#121212; --line:#2a2a2a; --text:#eee;
+      --accent:#00ff6a; --active:#ff3b3b; --gap:10px;
+      --radius:16px;
+    }
+    html,body{height:100%;}
+    body{
+      margin:0; background:#111; color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      overscroll-behavior:none;
+    }
+    .app{min-height:100%; display:flex; flex-direction:column;}
+    header{
+      position:sticky; top:0; z-index:10;
+      background:rgba(15,15,15,0.92); backdrop-filter: blur(10px);
+      border-bottom:1px solid #222;
+      padding:10px 10px calc(10px + env(safe-area-inset-bottom)) 10px;
+    }
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+    .row.nowrap{flex-wrap:nowrap;}
+    button, select{
+      appearance:none;
+      border:1px solid #333; background:#1f1f1f; color:var(--text);
+      border-radius:14px;
+      padding:12px 12px;
+      font-size:14px;
+    }
+    button{font-weight:600;}
+    button:disabled{opacity:.45;}
+    .mini{padding:10px 10px; font-size:13px; font-weight:600;}
+    .ghost{background:#161616;}
+    .activeBtn{outline:2px solid var(--active);}
+    .pill{
+      border:1px solid #333; background:#1a1a1a;
+      border-radius:999px; padding:8px 10px; font-size:12px; opacity:.9;
+    }
+    .spacer{flex:1;}
+    main{
+      flex:1; display:flex; flex-direction:column; gap:var(--gap);
+      padding:10px; box-sizing:border-box;
+    }
+    .panel{
+      background:var(--panel); border:1px solid var(--line);
+      border-radius:var(--radius); overflow:hidden;
+    }
+    .panel h3{
+      margin:0; padding:10px 12px; font-size:13px; opacity:.9;
+      border-bottom:1px solid #222; background:#161616;
+    }
+    .canvasWrap{position:relative;}
+    canvas{width:100%; height:auto; display:block; touch-action:none;}
+    .empty{
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      color:#bbb; text-align:center; padding:18px;
+      pointer-events:none;
+    }
+    .emptyBox{
+      max-width:520px;
+      border:1px dashed #333; border-radius:14px;
+      padding:16px; background:#0c0c0caa;
+    }
+    .emptyBox h2{margin:0 0 8px 0; font-size:16px; color:#eee;}
+    .emptyBox p{margin:0; font-size:13px; line-height:1.5; color:#cfcfcf;}
+
+    /* Controls footer */
+    .controls{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+    }
+    .controls .panel{padding:10px;}
+    .grid4{
+      display:grid; grid-template-columns:repeat(4,1fr); gap:10px;
+    }
+    .nudge{
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:10px;
+      align-items:center;
+    }
+    .nudge button{padding:12px;}
+    .nudge .emptyCell{opacity:0;}
+    .label{font-size:12px; opacity:.85; margin:0 0 6px 2px;}
+    .smallRow{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    .smallRow select{padding:10px 10px;}
+
+    /* Modal */
+    .modalBackdrop{
+      position:fixed; inset:0; background:rgba(0,0,0,0.72);
+      display:none; align-items:center; justify-content:center;
+      padding:16px;
+    }
+    .modal{
+      width:min(980px, 95vw); height:min(88vh, 760px);
+      background:#101010; border:1px solid #333; border-radius:16px;
+      display:flex; flex-direction:column; overflow:hidden;
+    }
+    .modal header{
+      position:unset;
+      padding:10px; border-bottom:1px solid #222; background:#0f0f0f;
+    }
+    .modal .content{flex:1; padding:10px; display:flex; align-items:center; justify-content:center;}
+    .modal canvas{background:#000; border-radius:12px; width:auto; height:auto; max-width:100%; max-height:100%;}
+  </style>
+</head>
+
+<body>
+<div class="app">
+  <header>
+    <div class="row">
+      <button id="openBtn">Open images</button>
+      <button id="demoBtn" class="ghost">Load demo</button>
+      <button id="pdfBtn" disabled>PDF</button>
+      <input id="fileInput" type="file" accept="image/*" multiple hidden />
+      <div class="spacer"></div>
+      <span class="pill" id="status">No files loaded.</span>
+    </div>
+
+    <div class="row">
+      <select id="orientSel" class="mini" title="Orientation">
+        <option value="portrait" selected>Portrait</option>
+        <option value="landscape">Landscape</option>
+      </select>
+
+      <select id="dpiSel" class="mini" title="Output DPI">
+        <option value="150">150 dpi</option>
+        <option value="200">200 dpi</option>
+        <option value="300" selected>300 dpi</option>
+        <option value="400">400 dpi</option>
+        <option value="600">600 dpi</option>
+      </select>
+
+      <span class="pill" id="outInfo">—</span>
+
+      <div class="spacer"></div>
+      <button id="previewBtn" disabled class="ghost">Preview</button>
+      <button id="nextBtn" disabled class="ghost">Next</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h3>Image</h3>
+      <div class="canvasWrap">
+        <canvas id="fullCanvas"></canvas>
+        <div class="empty" id="emptyOverlay">
+          <div class="emptyBox">
+            <h2>Pull Corners (Mobile)</h2>
+            <p>
+              Tap a corner (1–4), then drag it into place.<br/>
+              Use nudge buttons for precision. Tap Preview to download.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>Zoomed corner</h3>
+      <div class="canvasWrap">
+        <canvas id="zoomCanvas"></canvas>
+      </div>
+    </section>
+
+    <section class="panel" style="padding:10px;">
+      <div class="controls">
+        <div class="panel">
+          <div class="label">Active corner</div>
+          <div class="grid4" id="cornerBtns">
+            <button class="mini" data-c="0">1</button>
+            <button class="mini" data-c="1">2</button>
+            <button class="mini" data-c="2">3</button>
+            <button class="mini" data-c="3">4</button>
+          </div>
+          <div style="height:10px;"></div>
+          <div class="label">Zoom</div>
+          <div class="smallRow">
+            <button id="zoomOut" class="mini">−</button>
+            <span class="pill" id="zoomVal">6.0×</span>
+            <button id="zoomIn" class="mini">+</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="label">Nudge (step in px)</div>
+          <div class="smallRow">
+            <select id="stepSel" class="mini" title="Nudge step">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="5">5</option>
+              <option value="10">10</option>
+            </select>
+            <span class="pill">Tip: smaller step for precision</span>
+          </div>
+          <div style="height:10px;"></div>
+          <div class="nudge">
+            <div class="emptyCell">.</div>
+            <button id="upBtn">⬆️</button>
+            <div class="emptyCell">.</div>
+            <button id="leftBtn">⬅️</button>
+            <button id="downBtn">⬇️</button>
+            <button id="rightBtn">➡️</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modalBackdrop" id="modalBackdrop">
+    <div class="modal">
+      <header>
+        <div class="row nowrap">
+          <span class="pill">Preview</span>
+          <span class="pill" id="outName">—</span>
+          <div class="spacer"></div>
+          <button id="downloadBtn">Download JPG</button>
+          <button id="closeBtn" class="ghost">Close</button>
+        </div>
+      </header>
+      <div class="content">
+        <canvas id="previewCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+<script>
+/* --- Demo (only loads on click) --- */
+const DEMO = [
+  { name: "S1.jpg", url: "figures/S1.jpg", kind: "demo" },
+  { name: "S2.jpg", url: "figures/S2.jpg", kind: "demo" },
+];
+
+/* --- A4 inches --- */
+const A4_IN = { w: 8.2677165, h: 11.6929134 };
+let portraitMode = true;
+let dpi = 300;
+let OUT_W = 0, OUT_H = 0;
+
+function updateOutputSize(){
+  const wIn = portraitMode ? A4_IN.w : A4_IN.h;
+  const hIn = portraitMode ? A4_IN.h : A4_IN.w;
+  OUT_W = Math.round(wIn * dpi);
+  OUT_H = Math.round(hIn * dpi);
+  outInfo.textContent = `${OUT_W}×${OUT_H}`;
+}
+
+/* --- UI --- */
+const openBtn = document.getElementById("openBtn");
+const demoBtn = document.getElementById("demoBtn");
+const pdfBtn = document.getElementById("pdfBtn");
+const previewBtn = document.getElementById("previewBtn");
+const nextBtn = document.getElementById("nextBtn");
+const fileInput = document.getElementById("fileInput");
+
+const orientSel = document.getElementById("orientSel");
+const dpiSel = document.getElementById("dpiSel");
+const stepSel = document.getElementById("stepSel");
+
+const status = document.getElementById("status");
+const outInfo = document.getElementById("outInfo");
+const emptyOverlay = document.getElementById("emptyOverlay");
+
+const fullCanvas = document.getElementById("fullCanvas");
+const zoomCanvas = document.getElementById("zoomCanvas");
+const previewCanvas = document.getElementById("previewCanvas");
+
+const modalBackdrop = document.getElementById("modalBackdrop");
+const closeBtn = document.getElementById("closeBtn");
+const downloadBtn = document.getElementById("downloadBtn");
+const outName = document.getElementById("outName");
+
+const zoomIn = document.getElementById("zoomIn");
+const zoomOut = document.getElementById("zoomOut");
+const zoomVal = document.getElementById("zoomVal");
+
+const upBtn = document.getElementById("upBtn");
+const downBtn = document.getElementById("downBtn");
+const leftBtn = document.getElementById("leftBtn");
+const rightBtn = document.getElementById("rightBtn");
+
+const cornerBtns = document.getElementById("cornerBtns");
+
+/* --- Canvas ctx --- */
+const fullCtx = fullCanvas.getContext("2d");
+const zoomCtx = zoomCanvas.getContext("2d");
+
+/* --- State --- */
+let items = [];
+let current = -1;
+
+let img = new Image();
+img.decoding = "async";
+let imgLoaded = false;
+
+let pts = null;    // [[x,y]...]
+let active = 0;
+let zoom = 6.0;
+
+let fullScale=1, fullOffsetX=0, fullOffsetY=0, fullDrawW=0, fullDrawH=0;
+const pageState = new Map();
+const PREVIEW_MAX_W = 1100;
+
+function setStatus(t){ status.textContent = t; }
+function dpr(){ return Math.max(1, window.devicePixelRatio || 1); }
+
+function resizeCanvasToCSS(canvas){
+  const r = canvas.getBoundingClientRect();
+  const s = dpr();
+  const w = Math.max(1, Math.floor(r.width*s));
+  const h = Math.max(1, Math.floor(r.width*s * 0.75)); // keep mobile image canvas reasonable
+  // For full canvas, we want a decent height. We'll set via draw() based on aspect.
+  return { cssW:r.width, s, w, h };
+}
+
+function setCanvasPixelSize(canvas, w, h){
+  if (canvas.width !== w || canvas.height !== h){
+    canvas.width = w; canvas.height = h;
+  }
+}
+
+function pageKey(i){ return items[i]?.name ?? String(i); }
+
+function defaultPointsForImage(){
+  const w = img.naturalWidth, h = img.naturalHeight;
+  return [
+    [Math.round(w*0.1), Math.round(h*0.1)],
+    [Math.round(w*0.9), Math.round(h*0.1)],
+    [Math.round(w*0.9), Math.round(h*0.9)],
+    [Math.round(w*0.1), Math.round(h*0.9)],
+  ];
+}
+
+function savePageState(){
+  if (!imgLoaded || current < 0) return;
+  pageState.set(pageKey(current), { pts: pts.map(p=>[p[0],p[1]]), zoom, active });
+}
+
+function restorePageStateOrDefault(){
+  const st = pageState.get(pageKey(current));
+  if (st?.pts?.length === 4){
+    pts = st.pts.map(p=>[p[0],p[1]]);
+    zoom = st.zoom ?? 6.0;
+    active = st.active ?? 0;
+  } else {
+    pts = defaultPointsForImage();
+    zoom = 6.0;
+    active = 0;
+  }
+  updateCornerButtons();
+  zoomVal.textContent = `${zoom.toFixed(1)}×`;
+}
+
+function clampPoint(i){
+  const w = img.naturalWidth, h = img.naturalHeight;
+  pts[i][0] = Math.max(0, Math.min(w-1, pts[i][0]));
+  pts[i][1] = Math.max(0, Math.min(h-1, pts[i][1]));
+}
+
+function showLoadedUI(){
+  emptyOverlay.style.display = "none";
+  previewBtn.disabled = false;
+  pdfBtn.disabled = false;
+  nextBtn.disabled = (items.length <= 1);
+}
+
+function resetToEmpty(){
+  items = [];
+  current = -1;
+  imgLoaded = false;
+  pageState.clear();
+  previewBtn.disabled = true;
+  pdfBtn.disabled = true;
+  nextBtn.disabled = true;
+  emptyOverlay.style.display = "flex";
+  setStatus("No files loaded.");
+  fullCtx.setTransform(1,0,0,1,0,0);
+  fullCtx.clearRect(0,0,fullCanvas.width, fullCanvas.height);
+  zoomCtx.setTransform(1,0,0,1,0,0);
+  zoomCtx.clearRect(0,0,zoomCanvas.width, zoomCanvas.height);
+}
+
+/* --- Drawing --- */
+function draw(){
+  if (!imgLoaded) return;
+
+  const s = dpr();
+
+  // Full canvas: set height by image aspect, capped
+  const rect = fullCanvas.getBoundingClientRect();
+  const cssW = rect.width;
+  const maxCssH = Math.min(window.innerHeight * 0.55, 520);
+  const cssH = Math.min(maxCssH, cssW * (img.naturalHeight / img.naturalWidth));
+  setCanvasPixelSize(fullCanvas, Math.max(1, Math.floor(cssW*s)), Math.max(1, Math.floor(cssH*s)));
+
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  fullScale = Math.min(fullCanvas.width/iw, fullCanvas.height/ih);
+  fullDrawW = Math.floor(iw*fullScale);
+  fullDrawH = Math.floor(ih*fullScale);
+  fullOffsetX = Math.floor((fullCanvas.width - fullDrawW)/2);
+  fullOffsetY = Math.floor((fullCanvas.height - fullDrawH)/2);
+
+  fullCtx.setTransform(1,0,0,1,0,0);
+  fullCtx.clearRect(0,0,fullCanvas.width, fullCanvas.height);
+  fullCtx.drawImage(img, 0,0,iw,ih, fullOffsetX, fullOffsetY, fullDrawW, fullDrawH);
+
+  const p = pts.map(([x,y]) => [fullOffsetX + x*fullScale, fullOffsetY + y*fullScale]);
+  fullCtx.strokeStyle = "#00ff6a";
+  fullCtx.lineWidth = 2*s;
+  fullCtx.beginPath();
+  fullCtx.moveTo(p[0][0], p[0][1]);
+  for (let i=1;i<4;i++) fullCtx.lineTo(p[i][0], p[i][1]);
+  fullCtx.closePath();
+  fullCtx.stroke();
+
+  for (let i=0;i<4;i++){
+    const [px,py] = p[i];
+    fullCtx.fillStyle = (i===active) ? "#ff3b3b" : "#00ff6a";
+    fullCtx.beginPath();
+    fullCtx.arc(px, py, 8*s, 0, Math.PI*2);
+    fullCtx.fill();
+    fullCtx.font = `${14*s}px system-ui`;
+    fullCtx.fillText(String(i+1), px + 10*s, py + 5*s);
+  }
+
+  // Zoom canvas: fixed-ish height
+  const zRect = zoomCanvas.getBoundingClientRect();
+  const zCssW = zRect.width;
+  const zCssH = Math.min(280, window.innerHeight * 0.28);
+  setCanvasPixelSize(zoomCanvas, Math.max(1, Math.floor(zCssW*s)), Math.max(1, Math.floor(zCssH*s)));
+
+  zoomCtx.setTransform(1,0,0,1,0,0);
+  zoomCtx.clearRect(0,0,zoomCanvas.width, zoomCanvas.height);
+
+  const [ax,ay] = pts[active];
+  const base = 180;
+  const half = Math.max(12, Math.floor(base/zoom));
+  const x1 = Math.max(0, ax-half), y1 = Math.max(0, ay-half);
+  const x2 = Math.min(iw, ax+half), y2 = Math.min(ih, ay+half);
+  const cropW = x2-x1, cropH = y2-y1;
+
+  const s2 = Math.min(zoomCanvas.width/cropW, zoomCanvas.height/cropH);
+  const dw = Math.floor(cropW*s2), dh = Math.floor(cropH*s2);
+  const zx = Math.floor((zoomCanvas.width-dw)/2);
+  const zy = Math.floor((zoomCanvas.height-dh)/2);
+
+  zoomCtx.drawImage(img, x1,y1,cropW,cropH, zx,zy,dw,dh);
+
+  const cx = zx + (ax-x1)*s2;
+  const cy = zy + (ay-y1)*s2;
+  zoomCtx.strokeStyle = "#ff3b3b";
+  zoomCtx.lineWidth = 2*s;
+  zoomCtx.beginPath();
+  zoomCtx.moveTo(cx-20*s, cy); zoomCtx.lineTo(cx+20*s, cy);
+  zoomCtx.moveTo(cx, cy-20*s); zoomCtx.lineTo(cx, cy+20*s);
+  zoomCtx.stroke();
+
+  zoomVal.textContent = `${zoom.toFixed(1)}×`;
+  setStatus(`${items[current].name} (${current+1}/${items.length})`);
+}
+
+/* --- Touch interaction (drag corner) --- */
+function touchToImage(clientX, clientY){
+  const rect = fullCanvas.getBoundingClientRect();
+  const s = dpr();
+  const mx = (clientX - rect.left) * s;
+  const my = (clientY - rect.top) * s;
+  return [(mx - fullOffsetX)/fullScale, (my - fullOffsetY)/fullScale];
+}
+function dist2(a,b){ const dx=a[0]-b[0], dy=a[1]-b[1]; return dx*dx+dy*dy; }
+function pickNearestPoint(x,y){
+  const maxPx=45;
+  let best=-1, bestD=1e18;
+  for (let i=0;i<4;i++){
+    const d=dist2([x,y], pts[i]);
+    if (d<bestD){ bestD=d; best=i; }
+  }
+  return (Math.sqrt(bestD)<=maxPx) ? best : -1;
+}
+
+let dragging = false;
+
+fullCanvas.addEventListener("pointerdown",(e)=>{
+  if(!imgLoaded) return;
+  fullCanvas.setPointerCapture(e.pointerId);
+  const [x,y]=touchToImage(e.clientX, e.clientY);
+  const i=pickNearestPoint(x,y);
+  if(i !== -1) active = i;
+  dragging = true;
+  updateCornerButtons();
+  draw();
+});
+fullCanvas.addEventListener("pointermove",(e)=>{
+  if(!imgLoaded || !dragging) return;
+  const [x,y]=touchToImage(e.clientX, e.clientY);
+  pts[active][0]=Math.round(x);
+  pts[active][1]=Math.round(y);
+  clampPoint(active);
+  savePageState();
+  draw();
+});
+fullCanvas.addEventListener("pointerup",(e)=>{
+  dragging=false;
+  try{ fullCanvas.releasePointerCapture(e.pointerId); }catch(_){}
+});
+fullCanvas.addEventListener("pointercancel",()=> dragging=false);
+
+/* --- Corner buttons --- */
+function updateCornerButtons(){
+  [...cornerBtns.querySelectorAll("button")].forEach((b)=>{
+    b.classList.toggle("activeBtn", Number(b.dataset.c)===active);
+  });
+}
+cornerBtns.addEventListener("click",(e)=>{
+  const b = e.target.closest("button");
+  if(!b) return;
+  active = Number(b.dataset.c);
+  updateCornerButtons();
+  savePageState();
+  draw();
+});
+
+/* --- Nudge --- */
+function nudge(dx,dy){
+  if(!imgLoaded) return;
+  const step = parseInt(stepSel.value, 10);
+  pts[active][0] += dx*step;
+  pts[active][1] += dy*step;
+  clampPoint(active);
+  savePageState();
+  draw();
+}
+upBtn.onclick = ()=> nudge(0,-1);
+downBtn.onclick = ()=> nudge(0, 1);
+leftBtn.onclick = ()=> nudge(-1,0);
+rightBtn.onclick = ()=> nudge(1, 0);
+
+/* --- Zoom --- */
+zoomIn.onclick = ()=> { zoom = Math.min(50, zoom*1.25); savePageState(); draw(); };
+zoomOut.onclick = ()=> { zoom = Math.max(1.5, zoom/1.25); savePageState(); draw(); };
+
+/* --- Warp math (same as desktop) --- */
+function solveLinearSystem(A,b){
+  const n=b.length;
+  const M=A.map((row,i)=>row.concat([b[i]]));
+  for(let col=0; col<n; col++){
+    let pivot=col;
+    for(let r=col+1; r<n; r++){
+      if(Math.abs(M[r][col])>Math.abs(M[pivot][col])) pivot=r;
+    }
+    if(Math.abs(M[pivot][col])<1e-12) throw new Error("Singular system");
+    [M[col], M[pivot]]=[M[pivot], M[col]];
+    const div=M[col][col];
+    for(let c=col; c<=n; c++) M[col][c]/=div;
+    for(let r=0; r<n; r++){
+      if(r===col) continue;
+      const f=M[r][col];
+      for(let c=col; c<=n; c++) M[r][c]-=f*M[col][c];
+    }
+  }
+  return M.map(row=>row[n]);
+}
+function computeHomography(srcPts,dstPts){
+  const A=[], b=[];
+  for(let i=0;i<4;i++){
+    const [x,y]=srcPts[i];
+    const [u,v]=dstPts[i];
+    A.push([x,y,1, 0,0,0, -u*x,-u*y]); b.push(u);
+    A.push([0,0,0, x,y,1, -v*x,-v*y]); b.push(v);
+  }
+  const x=solveLinearSystem(A,b);
+  return [[x[0],x[1],x[2]],[x[3],x[4],x[5]],[x[6],x[7],1]];
+}
+function invert3x3(H){
+  const a=H[0][0], b=H[0][1], c=H[0][2];
+  const d=H[1][0], e=H[1][1], f=H[1][2];
+  const g=H[2][0], h=H[2][1], i=H[2][2];
+  const A=e*i-f*h, B=-(d*i-f*g), C=d*h-e*g;
+  const D=-(b*i-c*h), E=a*i-c*g, F=-(a*h-b*g);
+  const G=b*f-c*e, Hh=-(a*f-c*d), I=a*e-b*d;
+  const det=a*A + b*B + c*C;
+  if(Math.abs(det)<1e-12) throw new Error("Non-invertible homography");
+  const inv=1/det;
+  return [[A*inv,D*inv,G*inv],[B*inv,E*inv,Hh*inv],[C*inv,F*inv,I*inv]];
+}
+function applyHomography(H,x,y){
+  const X=H[0][0]*x + H[0][1]*y + H[0][2];
+  const Y=H[1][0]*x + H[1][1]*y + H[1][2];
+  const W=H[2][0]*x + H[2][1]*y + H[2][2];
+  return [X/W, Y/W];
+}
+function getPixelBilinear(src, sw, sh, x, y){
+  if(x<0) x=0; if(y<0) y=0;
+  if(x>sw-1) x=sw-1; if(y>sh-1) y=sh-1;
+  const x0=Math.floor(x), y0=Math.floor(y);
+  const x1=Math.min(sw-1, x0+1), y1=Math.min(sh-1, y0+1);
+  const dx=x-x0, dy=y-y0;
+  const i00=(y0*sw+x0)*4, i10=(y0*sw+x1)*4;
+  const i01=(y1*sw+x0)*4, i11=(y1*sw+x1)*4;
+  const out=[0,0,0,255];
+  for(let c=0;c<3;c++){
+    const p00=src[i00+c], p10=src[i10+c], p01=src[i01+c], p11=src[i11+c];
+    const p0=p00*(1-dx)+p10*dx;
+    const p1=p01*(1-dx)+p11*dx;
+    out[c]=p0*(1-dy)+p1*dy;
+  }
+  return out;
+}
+function warpToCanvas(outputW, outputH, targetCanvas){
+  const srcCanvas=document.createElement("canvas");
+  srcCanvas.width=img.naturalWidth;
+  srcCanvas.height=img.naturalHeight;
+  const sctx=srcCanvas.getContext("2d",{willReadFrequently:true});
+  sctx.drawImage(img,0,0);
+  const sw=srcCanvas.width, sh=srcCanvas.height;
+  const srcData=sctx.getImageData(0,0,sw,sh).data;
+
+  const dstPts=[[0,0],[outputW-1,0],[outputW-1,outputH-1],[0,outputH-1]];
+  const H = computeHomography(pts, dstPts);
+  const Hinv = invert3x3(H);
+
+  targetCanvas.width=outputW;
+  targetCanvas.height=outputH;
+  const tctx=targetCanvas.getContext("2d",{willReadFrequently:true});
+  const outImg=tctx.createImageData(outputW, outputH);
+  const out=outImg.data;
+
+  let k=0;
+  for(let y=0;y<outputH;y++){
+    for(let x=0;x<outputW;x++,k+=4){
+      const [sx,sy]=applyHomography(Hinv,x,y);
+      const [r,g,b,a]=getPixelBilinear(srcData,sw,sh,sx,sy);
+      out[k]=r; out[k+1]=g; out[k+2]=b; out[k+3]=a;
+    }
+  }
+  tctx.putImageData(outImg,0,0);
+}
+
+/* --- Preview / download --- */
+async function ensureImageDecoded(){
+  if(typeof img.decode==="function"){ try{ await img.decode(); } catch(_){ } }
+}
+function fitA4InContainer(containerW, containerH){
+  const ratio = OUT_H/OUT_W;
+  let w = Math.min(containerW, PREVIEW_MAX_W);
+  let h = w*ratio;
+  if(h>containerH){ h=containerH; w=h/ratio; }
+  return [Math.max(1,Math.floor(w)), Math.max(1,Math.floor(h))];
+}
+async function openPreview(){
+  if(!imgLoaded) return;
+  savePageState();
+
+  const base = items[current].name.replace(/\.[^.]+$/,"");
+  outName.textContent = `${base}_flat.jpg`;
+
+  modalBackdrop.style.display="flex";
+  await ensureImageDecoded();
+
+  const content = previewCanvas.parentElement.getBoundingClientRect();
+  const [pw,ph] = fitA4InContainer(content.width, content.height);
+  warpToCanvas(pw, ph, previewCanvas);
+}
+function closePreview(){ modalBackdrop.style.display="none"; }
+
+async function downloadCurrentJpg(){
+  const base = items[current].name.replace(/\.[^.]+$/,"");
+  const filename = `${base}_flat.jpg`;
+  await ensureImageDecoded();
+  const off=document.createElement("canvas");
+  warpToCanvas(OUT_W, OUT_H, off);
+  off.toBlob((blob)=>{
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download=filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  }, "image/jpeg", 0.95);
+}
+
+/* --- Load / navigation --- */
+async function loadImageFromCurrent(){
+  imgLoaded=false;
+  setStatus("Loading image…");
+  await new Promise((resolve)=>{
+    img.onload=resolve; img.onerror=resolve;
+    img.src = items[current].url;
+  });
+  if(!img.naturalWidth){ setStatus("Failed to load image."); return false; }
+  imgLoaded=true;
+  showLoadedUI();
+  return true;
+}
+async function gotoPage(i){
+  if(i<0 || i>=items.length) return;
+  if(current>=0) savePageState();
+  current=i;
+  const ok=await loadImageFromCurrent();
+  if(!ok) return;
+  restorePageStateOrDefault();
+  draw();
+}
+async function loadItems(newItems, hideDemo=false){
+  for(const it of items){ if(it._blobUrl) URL.revokeObjectURL(it.url); }
+  pageState.clear();
+  items=newItems;
+  current=-1;
+  if(hideDemo) demoBtn.style.display="none";
+  emptyOverlay.style.display="none";
+  await gotoPage(0);
+}
+
+/* --- PDF export --- */
+async function downloadPdfAll(){
+  if(!items.length) return;
+  pdfBtn.disabled = true;
+  setStatus("Building PDF…");
+
+  try{
+    savePageState();
+    const { PDFDocument } = PDFLib;
+    const pdf = await PDFDocument.create();
+    const off = document.createElement("canvas");
+
+    for(let i=0;i<items.length;i++){
+      await gotoPage(i);
+      await ensureImageDecoded();
+      warpToCanvas(OUT_W, OUT_H, off);
+
+      const jpgBytes = await new Promise((resolve)=>{
+        off.toBlob(async (b)=> resolve(await b.arrayBuffer()), "image/jpeg", 0.95);
+      });
+
+      const jpg = await pdf.embedJpg(jpgBytes);
+      const page = pdf.addPage([OUT_W, OUT_H]);
+      page.drawImage(jpg, {x:0,y:0,width:OUT_W,height:OUT_H});
+      setStatus(`PDF… ${i+1}/${items.length}`);
+    }
+
+    const pdfBytes = await pdf.save();
+    const blob = new Blob([pdfBytes], {type:"application/pdf"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="report.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+
+    setStatus("PDF ready.");
+  }catch(e){
+    setStatus("PDF failed: "+e.message);
+  }finally{
+    pdfBtn.disabled=false;
+  }
+}
+
+/* --- Header controls --- */
+openBtn.onclick = ()=> fileInput.click();
+fileInput.onchange = async ()=>{
+  if(!fileInput.files?.length) return;
+  const fs = Array.from(fileInput.files).sort((a,b)=>a.name.localeCompare(b.name, undefined, {numeric:true, sensitivity:"base"}));
+  const userItems = fs.map(f=>({name:f.name, url:URL.createObjectURL(f), _blobUrl:true, kind:"user"}));
+  await loadItems(userItems, true); // hide demo button
+};
+demoBtn.onclick = async ()=> { await loadItems(DEMO.slice(), false); };
+pdfBtn.onclick = downloadPdfAll;
+
+previewBtn.onclick = openPreview;
+nextBtn.onclick = ()=> { if(current<items.length-1) gotoPage(current+1); else gotoPage(0); };
+
+orientSel.onchange = ()=> { portraitMode = orientSel.value==="portrait"; updateOutputSize(); };
+dpiSel.onchange = ()=> { dpi = parseInt(dpiSel.value,10); updateOutputSize(); };
+
+/* --- Modal --- */
+closeBtn.onclick = closePreview;
+downloadBtn.onclick = downloadCurrentJpg;
+modalBackdrop.addEventListener("click",(e)=>{ if(e.target===modalBackdrop) closePreview(); });
+
+window.addEventListener("resize", ()=> { if(imgLoaded) draw(); });
+
+/* --- Start empty --- */
+updateOutputSize();
+resetToEmpty();
+</script>
+</body>
+</html>
+
